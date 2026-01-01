@@ -205,6 +205,9 @@ def stripSxxExx(title):
   return
 
 def parseEpisode(title):
+  if title is None:
+    return None
+  
   airdate = airDateMatch(title)
   titlelen = len(title)
   showtitle, episodetitle, language = None, None, None
@@ -237,5 +240,3 @@ def parseEpisode(title):
       episodenumber = episodeMatch(title)
       showtitle = stripSxxExx(title)
     return [showtitle, episodetitle, seasonnumber, episodenumber, language]
-  
- 
