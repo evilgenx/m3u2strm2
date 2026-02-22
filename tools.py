@@ -59,7 +59,8 @@ def getResult(re_match):
   return re_match.group().split('\"')[1]
       
 def sxxExxMatch(line):
-  tvshowmatch = re.compile('[s][0-9][0-9][e][0-9][0-9]|[0-9][0-9][x][0-9][0-9][ ][-][ ]|[s][0-9][0-9][ ][e][0-9][0-9]|[0-9][0-9][x][0-9][0-9]', re.IGNORECASE).search(line)
+  # Updated to handle S##E## format and other variations
+  tvshowmatch = re.compile('[s][0-9][0-9][e][0-9][0-9]|[0-9][0-9][x][0-9][0-9][ ][-][ ]|[s][0-9][0-9][ ][e][0-9][0-9]|[0-9][0-9][x][0-9][0-9]|[s][0-9][0-9][e][0-9][0-9]', re.IGNORECASE).search(line)
   if tvshowmatch:
     return tvshowmatch
   tvshowmatch = seasonMatch2(line)
@@ -80,13 +81,15 @@ def tvgChannelMatch(line):
   return
 
 def yearMatch(line):
-  yearmatch = re.compile('[(][1-2][0-9][0-9][0-9][)]').search(line)
+  # Updated to handle years in parentheses and standalone years
+  yearmatch = re.compile('[(][1-2][0-9][0-9][0-9][)]|[1-2][0-9][0-9][0-9]').search(line)
   if yearmatch:
     return yearmatch
   return
 
 def resolutionMatch(line):
-  resolutionmatch = re.compile('HD|SD|720p WEB x264-XLF|WEB x264-XLF').search(line)
+  # Updated to handle more resolution formats including from URLs
+  resolutionmatch = re.compile('HD|SD|720p|1080p|4K|2160p|WEB x264-XLF|WEB x264-XLF').search(line)
   if resolutionmatch:
     return resolutionmatch
   return
@@ -181,13 +184,15 @@ def languageMatch(line):
   if (line == None):
     return
 
-  languagematch = re.compile('[|][A-Z][A-Z][|]', re.IGNORECASE).search(line)
+  # Updated to handle language tags with or without pipes
+  languagematch = re.compile('[|]?[A-Z][A-Z][|]?', re.IGNORECASE).search(line)
   if languagematch:
     return languagematch
   return
 
 def stripLanguage(title):
-  languagematch = re.sub('[|][A-Z][A-Z][|]', "", title, flags=re.IGNORECASE)
+  # Updated to handle language tags with or without pipes
+  languagematch = re.sub('[|]?[A-Z][A-Z][|]?', "", title, flags=re.IGNORECASE)
   if languagematch:
     return languagematch.strip()
   return
@@ -208,35 +213,52 @@ def parseEpisode(title):
   if title is None:
     return None
   
+  # First check for air date format (YYYY MM DD)
   airdate = airDateMatch(title)
-  titlelen = len(title)
-  showtitle, episodetitle, language = None, None, None
   if airdate:
     showtitle = title[:airdate.start()].strip()
-    if airdate.end() != titlelen:
-      episodetitle = title[airdate.end():].strip()
-    return [showtitle,episodetitle,airdate.group()]
+    episodetitle = title[airdate.end():].strip() if airdate.end() < len(title) else None
+    return [showtitle, episodetitle, None, None, None, airdate.group()]
+  
+  # Check for season/episode format
   seasonepisode = sxxExxMatch(title)
   if seasonepisode:
-    print(seasonepisode)
-    if seasonepisode.end() - seasonepisode.start() > 6 or len(seasonepisode.group()) == 5:
-      
-      episodetitle = title[seasonepisode.end():].strip()
-      seasonnumber = seasonMatch(title)
-      episodenumber = episodeMatch(title)
-      showtitle = title[:seasonepisode.start()]
-      languagem = languageMatch(showtitle)
-      if languagem:
-        language = languagem.group().strip('|')
-        showtitle = showtitle[languagem.end():]
-        language2 = languageMatch(showtitle)
-        if language2:
-          showtitle = showtitle[:language2.start()]
-          season = seasonMatch2(showtitle)
-          if season:
-            showtitle = showtitle[:season.start()]
-    else:
-      seasonnumber = seasonMatch(title)
-      episodenumber = episodeMatch(title)
-      showtitle = stripSxxExx(title)
-    return [showtitle, episodetitle, seasonnumber, episodenumber, language]
+    # Extract the matched pattern
+    match_text = seasonepisode.group()
+    
+    # Handle different formats: S##E##, ##x##, S## E##, etc.
+    seasonnumber = None
+    episodenumber = None
+    
+    # Try to extract season and episode from the match
+    s_match = re.search(r'[sS](\d+)', match_text)
+    e_match = re.search(r'[eE](\d+)', match_text)
+    x_match = re.search(r'(\d+)[xX](\d+)', match_text)
+    
+    if s_match and e_match:
+      seasonnumber = s_match.group(1).zfill(2)
+      episodenumber = e_match.group(1).zfill(2)
+    elif x_match:
+      seasonnumber = x_match.group(1).zfill(2)
+      episodenumber = x_match.group(2).zfill(2)
+    
+    # Extract show title (everything before the season/episode pattern)
+    showtitle = title[:seasonepisode.start()].strip()
+    
+    # Extract episode title (everything after the season/episode pattern)
+    episodetitle = title[seasonepisode.end():].strip() if seasonepisode.end() < len(title) else None
+    
+    # Check for language tags in the show title
+    language = None
+    languagem = languageMatch(showtitle)
+    if languagem:
+      language = languagem.group().strip('|')
+      showtitle = showtitle[languagem.end():].strip()
+      # Remove any remaining language tags
+      language2 = languageMatch(showtitle)
+      if language2:
+        showtitle = showtitle[:language2.start()].strip()
+    
+    return [showtitle, episodetitle, seasonnumber, episodenumber, language, None]
+  
+  return None

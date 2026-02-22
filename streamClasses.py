@@ -224,12 +224,12 @@ class rawStreamList(object):
       
     episodeinfo = tools.parseEpisode(title)
     if episodeinfo:
-      if len(episodeinfo) == 3:
+      if len(episodeinfo) == 6 and episodeinfo[5]:  # Air date format
         showtitle = episodeinfo[0]
-        airdate = episodeinfo[2]
+        airdate = episodeinfo[5]
         episodename = episodeinfo[1]
         episode = TVEpisode(showtitle, streamURL, resolution=resolution, episodename=episodename, airdate=airdate)
-      else:
+      else:  # Season/episode format
         showtitle = episodeinfo[0]
         episodename = episodeinfo[1]
         seasonnumber = episodeinfo[2]
